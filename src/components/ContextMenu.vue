@@ -6,6 +6,7 @@
       left: x + 'px',
       top: y + 'px'
     }"
+    @click.stop
   >
     <div class="menu-item" @click="$emit('select-as-obstacles')">
       Set selected as obstacles
@@ -14,15 +15,35 @@
 </template>
 
 <script setup lang="ts">
-defineProps<{
+import { onMounted, onUnmounted } from 'vue';
+
+const props = defineProps<{
   show: boolean;
   x: number;
   y: number;
 }>();
 
-defineEmits<{
+const emit = defineEmits<{
   'select-as-obstacles': [];
+  'update:show': [value: boolean];
 }>();
+
+// 处理点击事件
+const handleClick = () => {
+  if (props.show) {
+    emit('update:show', false);
+  }
+};
+
+// 在组件挂载时添加事件监听
+onMounted(() => {
+  document.addEventListener('click', handleClick);
+});
+
+// 在组件卸载时移除事件监听
+onUnmounted(() => {
+  document.removeEventListener('click', handleClick);
+});
 </script>
 
 <style scoped>

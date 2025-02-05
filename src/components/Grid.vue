@@ -25,6 +25,7 @@
       :x="contextMenu.x"
       :y="contextMenu.y"
       @select-as-obstacles="setSelectedAsObstacles"
+      @update:show="(value) => contextMenu.show = value"
     />
   </div>
 </template>
