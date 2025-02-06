@@ -5,7 +5,6 @@
       <table class="table table-hover">
         <thead>
           <tr>
-            <th scope="col">Location</th>
             <th scope="col">Resource</th>
             <th scope="col">Base Rate</th>
             <th scope="col">Efficiency</th>
@@ -15,13 +14,26 @@
         </thead>
         <tbody>
           <tr v-for="operation in store.miningOperations" :key="operation.id">
-            <td>{{ operation.location }}</td>
             <td>{{ operation.resource }}</td>
             <td>{{ operation.rate }}/s</td>
             <td :class="getEfficiencyClass(operation.efficiency)">
               {{ operation.efficiency }}%
             </td>
-            <td>{{ operation.assignedShips }}</td>
+            <td>
+              <div class="d-flex align-items-center gap-2">
+                <button 
+                  class="btn btn-sm btn-danger" 
+                  @click="removeShip(operation.id)"
+                  :disabled="operation.assignedShips <= 0"
+                >-</button>
+                {{ operation.assignedShips }}
+                <button 
+                  class="btn btn-sm btn-success" 
+                  @click="addShip(operation.id)"
+                  :disabled="!hasAvailableShips"
+                >+</button>
+              </div>
+            </td>
             <td class="text-success">
               +{{ Number((operation.rate * operation.efficiency / 100 * operation.assignedShips).toFixed(1)) }}/s
             </td>
@@ -33,9 +45,29 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useResourceStore } from '../stores/resource'
 
 const store = useResourceStore()
+
+const miningShip = computed(() => 
+  store.spaceshipTypes.find(ship => ship.name === "Mining Ship")
+)
+
+const hasAvailableShips = computed(() => {
+  if (!miningShip.value) return false
+  return miningShip.value.assignedToMining < miningShip.value.count
+})
+
+const addShip = (miningId: number) => {
+  if (!miningShip.value || !hasAvailableShips.value) return
+  store.assignShipToMining(miningShip.value.id, miningId, 1)
+}
+
+const removeShip = (miningId: number) => {
+  if (!miningShip.value) return
+  store.unassignShipFromMining(miningShip.value.id, miningId, 1)
+}
 
 const getEfficiencyClass = (efficiency: number) => {
   if (efficiency >= 110) return 'text-success'

@@ -8,7 +8,6 @@
             <th scope="col">Name</th>
             <th scope="col">Amount</th>
             <th scope="col">Rate</th>
-            <th scope="col">Description</th>
           </tr>
         </thead>
         <tbody>
@@ -18,7 +17,6 @@
             <td :class="store.getResourceRate(resource.name) > 0 ? 'text-success' : 'text-danger'">
               {{ store.getResourceRate(resource.name) > 0 ? '+' : '' }}{{ store.getResourceRate(resource.name) }}/s
             </td>
-            <td class="text-muted">{{ resource.description }}</td>
           </tr>
         </tbody>
       </table>

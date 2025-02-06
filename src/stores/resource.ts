@@ -5,7 +5,6 @@ export interface Resource {
   id: number
   name: string
   amount: number
-  description: string
 }
 
 export interface ProductionItem {
@@ -21,13 +20,19 @@ export interface ProductionItem {
 
 export interface MiningOperation {
   id: number
-  location: string
   resource: string
   rate: number
   assignedShips: number
-  efficiency: number  // 当前效率
-  minEfficiency: number  // 最小效率
-  maxEfficiency: number  // 最大效率
+  efficiency: number
+  minEfficiency: number
+  maxEfficiency: number
+}
+
+export interface SpaceshipType {
+  id: number
+  name: string
+  count: number
+  assignedToMining: number
 }
 
 export const useResourceStore = defineStore('resource', () => {
@@ -36,26 +41,22 @@ export const useResourceStore = defineStore('resource', () => {
     {
       id: 1,
       name: "Fuel",
-      amount: 1000,
-      description: "Spacecraft fuel for interstellar travel"
+      amount: 1000
     },
     {
       id: 2,
       name: "Metal",
-      amount: 500,
-      description: "Raw materials for construction"
+      amount: 500
     },
     {
       id: 3,
       name: "Water",
-      amount: 800,
-      description: "Essential for life support"
+      amount: 800
     },
     {
       id: 4,
       name: "Alloy",
-      amount: 0,
-      description: "Advanced construction material"
+      amount: 0
     }
   ])
 
@@ -85,23 +86,37 @@ export const useResourceStore = defineStore('resource', () => {
   const miningOperations = ref<MiningOperation[]>([
     {
       id: 1,
-      location: "Asteroid Belt Alpha",
       resource: "Metal",
       rate: 3.5,
-      assignedShips: 2,
+      assignedShips: 0,
       efficiency: 100,
       minEfficiency: 80,
       maxEfficiency: 120
     },
     {
       id: 2,
-      location: "Ice Field Beta",
       resource: "Water",
       rate: 2.0,
-      assignedShips: 1,
+      assignedShips: 0,
       efficiency: 100,
       minEfficiency: 90,
       maxEfficiency: 110
+    }
+  ])
+
+  // 舰船类型列表
+  const spaceshipTypes = ref<SpaceshipType[]>([
+    {
+      id: 1,
+      name: "Mining Ship",
+      count: 5,
+      assignedToMining: 0
+    },
+    {
+      id: 2,
+      name: "Guard Ship",
+      count: 3,
+      assignedToMining: 0
     }
   ])
 
@@ -177,11 +192,43 @@ export const useResourceStore = defineStore('resource', () => {
     setInterval(updateResources, 1000)
   }
 
+  // 分配舰船到采矿操作
+  const assignShipToMining = (shipTypeId: number, miningId: number, count: number) => {
+    const shipType = spaceshipTypes.value.find(s => s.id === shipTypeId)
+    const mining = miningOperations.value.find(m => m.id === miningId)
+    
+    if (!shipType || !mining) return
+    
+    // 确保不超过可用舰船数量
+    const availableShips = shipType.count - shipType.assignedToMining
+    const actualAssignment = Math.min(count, availableShips)
+    
+    shipType.assignedToMining += actualAssignment
+    mining.assignedShips += actualAssignment
+  }
+
+  // 从采矿操作中移除舰船
+  const unassignShipFromMining = (shipTypeId: number, miningId: number, count: number) => {
+    const shipType = spaceshipTypes.value.find(s => s.id === shipTypeId)
+    const mining = miningOperations.value.find(m => m.id === miningId)
+    
+    if (!shipType || !mining) return
+    
+    // 确保不超过已分配的舰船数量
+    const actualUnassignment = Math.min(count, mining.assignedShips)
+    
+    shipType.assignedToMining -= actualUnassignment
+    mining.assignedShips -= actualUnassignment
+  }
+
   return {
     resources,
     productionItems,
     miningOperations,
     getResourceRate,
-    startResourceLoop
+    startResourceLoop,
+    spaceshipTypes,
+    assignShipToMining,
+    unassignShipFromMining
   }
 }) 
