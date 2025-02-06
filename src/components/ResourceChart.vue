@@ -12,7 +12,8 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useResourceStore } from '../stores/resource'
-import { Chart, ChartConfiguration } from 'chart.js/auto'
+import { Chart } from 'chart.js/auto'
+import type { ChartConfiguration } from 'chart.js'
 
 const store = useResourceStore()
 const chartRef = ref<HTMLCanvasElement | null>(null)
