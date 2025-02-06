@@ -4,6 +4,7 @@ import SpaceshipList from './components/SpaceshipList.vue'
 import ProductionList from './components/ProductionList.vue'
 import MiningList from './components/MiningList.vue'
 import ResourceChart from './components/ResourceChart.vue'
+import PopulationList from './components/PopulationList.vue'
 </script>
 
 <template>
@@ -14,6 +15,7 @@ import ResourceChart from './components/ResourceChart.vue'
           <div class="d-flex flex-column gap-4">
             <ResourceList />
             <ResourceChart />
+            <PopulationList />
             <SpaceshipList />
             <MiningList />
             <ProductionList />

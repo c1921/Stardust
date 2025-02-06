@@ -7,6 +7,13 @@ export interface Resource {
   amount: number
 }
 
+export interface PopulationType {
+  id: number
+  name: string  // 'Human' | 'Robot'
+  count: number
+  assignedToProduction: number
+}
+
 export interface ProductionItem {
   resource: string
   production: number
@@ -16,6 +23,9 @@ export interface ProductionItem {
     resource: string
     amount: number
   }[]
+  requiredWorkers: number
+  assignedHumans: number
+  assignedRobots: number
 }
 
 export interface MiningOperation {
@@ -60,6 +70,22 @@ export const useResourceStore = defineStore('resource', () => {
     }
   ])
 
+  // 人口类型列表
+  const populationTypes = ref<PopulationType[]>([
+    {
+      id: 1,
+      name: "Human",
+      count: 10,
+      assignedToProduction: 0
+    },
+    {
+      id: 2,
+      name: "Robot",
+      count: 5,
+      assignedToProduction: 0
+    }
+  ])
+
   // 生产配置
   const productionItems = ref<ProductionItem[]>([
     {
@@ -69,7 +95,10 @@ export const useResourceStore = defineStore('resource', () => {
       status: 'ACTIVE',
       requires: [
         { resource: "Water", amount: 1.0 }
-      ]
+      ],
+      requiredWorkers: 2,
+      assignedHumans: 0,
+      assignedRobots: 0
     },
     {
       resource: "Alloy",
@@ -78,7 +107,10 @@ export const useResourceStore = defineStore('resource', () => {
       status: 'ACTIVE',
       requires: [
         { resource: "Metal", amount: 2.0 }
-      ]
+      ],
+      requiredWorkers: 3,
+      assignedHumans: 0,
+      assignedRobots: 0
     }
   ])
 
@@ -147,14 +179,59 @@ export const useResourceStore = defineStore('resource', () => {
     })
   }
 
-  // 计算每个资源的净收益率
+  // 修改生产率计算
+  const getProductionEfficiency = (production: ProductionItem) => {
+    if (production.requiredWorkers === 0) return 1
+    return (production.assignedHumans + production.assignedRobots) / production.requiredWorkers
+  }
+
+  // 修改工人分配逻辑
+  const assignWorkerToProduction = (workerId: number, productionResource: string, count: number) => {
+    const worker = populationTypes.value.find(w => w.id === workerId)
+    const production = productionItems.value.find(p => p.resource === productionResource)
+    
+    if (!worker || !production) return
+    
+    const totalAssigned = production.assignedHumans + production.assignedRobots
+    const availableWorkers = worker.count - worker.assignedToProduction
+    const neededWorkers = production.requiredWorkers - totalAssigned
+    const actualAssignment = Math.min(count, availableWorkers, neededWorkers)
+    
+    worker.assignedToProduction += actualAssignment
+    if (worker.name === 'Human') {
+      production.assignedHumans += actualAssignment
+    } else {
+      production.assignedRobots += actualAssignment
+    }
+  }
+
+  // 修改工人移除逻辑
+  const unassignWorkerFromProduction = (workerId: number, productionResource: string, count: number) => {
+    const worker = populationTypes.value.find(w => w.id === workerId)
+    const production = productionItems.value.find(p => p.resource === productionResource)
+    
+    if (!worker || !production) return
+    
+    const assignedCount = worker.name === 'Human' ? production.assignedHumans : production.assignedRobots
+    const actualUnassignment = Math.min(count, assignedCount)
+    
+    worker.assignedToProduction -= actualUnassignment
+    if (worker.name === 'Human') {
+      production.assignedHumans -= actualUnassignment
+    } else {
+      production.assignedRobots -= actualUnassignment
+    }
+  }
+
+  // 修改资源变化率计算
   const getResourceRate = (resourceName: string) => {
     let rate = 0
 
-    // 加上生产量（考虑原材料消耗）
+    // 加上生产量（考虑工人效率）
     const production = productionItems.value.find(item => item.resource === resourceName)
     if (production && production.status === 'ACTIVE' && hasEnoughResources(production)) {
-      rate += production.production - production.consumption
+      const efficiency = getProductionEfficiency(production)
+      rate += (production.production - production.consumption) * efficiency
     }
 
     // 减去作为原材料的消耗
@@ -229,6 +306,9 @@ export const useResourceStore = defineStore('resource', () => {
     startResourceLoop,
     spaceshipTypes,
     assignShipToMining,
-    unassignShipFromMining
+    unassignShipFromMining,
+    populationTypes,
+    assignWorkerToProduction,
+    unassignWorkerFromProduction
   }
 }) 

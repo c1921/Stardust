@@ -20,19 +20,13 @@
               {{ operation.efficiency }}%
             </td>
             <td>
-              <div class="d-flex align-items-center gap-2">
-                <button 
-                  class="btn btn-sm btn-danger" 
-                  @click="removeShip(operation.id)"
-                  :disabled="operation.assignedShips <= 0"
-                >-</button>
-                {{ operation.assignedShips }}
-                <button 
-                  class="btn btn-sm btn-success" 
-                  @click="addShip(operation.id)"
-                  :disabled="!hasAvailableShips"
-                >+</button>
-              </div>
+              <NumberAdjuster
+                :value="operation.assignedShips"
+                :disable-decrease="operation.assignedShips <= 0"
+                :disable-increase="!hasAvailableShips"
+                @decrease="removeShip(operation.id)"
+                @increase="addShip(operation.id)"
+              />
             </td>
             <td class="text-success">
               +{{ Number((operation.rate * operation.efficiency / 100 * operation.assignedShips).toFixed(1)) }}/s
@@ -47,6 +41,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useResourceStore } from '../stores/resource'
+import NumberAdjuster from './NumberAdjuster.vue'
 
 const store = useResourceStore()
 
