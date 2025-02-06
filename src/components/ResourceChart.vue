@@ -1,5 +1,5 @@
 <template>
-  <div class="card text-white">
+  <div class="card">
     <div class="card-body">
       <h5 class="card-title mb-4">Resource Production Rates</h5>
       <div class="chart-container">
@@ -26,7 +26,8 @@ const datasets = store.resources.map(resource => ({
   data: [] as number[],
   borderColor: getResourceColor(resource.name),
   tension: 0.4,
-  fill: false
+  fill: false,
+  pointRadius: 0
 }))
 
 // 为不同资源分配不同颜色
@@ -76,6 +77,11 @@ onMounted(() => {
       responsive: true,
       maintainAspectRatio: false,
       animation: false,
+      elements: {
+        point: {
+          radius: 0
+        }
+      },
       scales: {
         y: {
           grid: {

@@ -1,5 +1,5 @@
 <template>
-  <div class="card text-white">
+  <div class="card">
     <div class="card-body">
       <h5 class="card-title mb-4">Spaceships</h5>
       <table class="table table-hover">
