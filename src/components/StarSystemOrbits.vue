@@ -1,186 +1,184 @@
 <template>
   <div class="orbit-map">
-    <canvas ref="canvas" class="w-100 h-100"></canvas>
+    <svg 
+      ref="svg" 
+      class="w-100 h-100"
+      :viewBox="`${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`"
+      @mousedown="handleMouseDown"
+      @mousemove="handleMouseMove"
+      @mouseup="handleMouseUp"
+      @mouseleave="handleMouseUp"
+      @wheel.prevent="handleWheel"
+    >
+      <!-- 背景网格 -->
+      <circle
+        v-for="r in gridCircles"
+        :key="r"
+        :r="r"
+        cx="0"
+        cy="0"
+        fill="none"
+        :stroke="ORBIT_CONFIG.colors.grid"
+        stroke-width="1"
+      />
+
+      <!-- 行星轨道和行星 -->
+      <g v-for="planet in PLANETS" :key="planet.name">
+        <!-- 轨道 -->
+        <circle
+          :r="planet.orbitRadius"
+          cx="0"
+          cy="0"
+          fill="none"
+          :stroke="planet.color"
+          stroke-width="1.5"
+        />
+        <!-- 行星和文字分开处理 -->
+        <g :transform="`rotate(${planet.angle * 180 / Math.PI})`">
+          <circle
+            :cx="planet.orbitRadius"
+            cy="0"
+            r="3"
+            :fill="planet.color"
+          />
+        </g>
+        <!-- 文字不旋转，使用计算后的坐标 -->
+        <text
+          :x="planet.orbitRadius * Math.cos(planet.angle)"
+          :y="planet.orbitRadius * Math.sin(planet.angle)"
+          :fill="ORBIT_CONFIG.colors.labels"
+          font-size="12"
+          :dx="8"
+          :dy="4"
+        >{{ planet.name }}</text>
+      </g>
+
+      <!-- 中心恒星 -->
+      <g v-if="star">
+        <circle
+          r="5"
+          cx="0"
+          cy="0"
+          :fill="ORBIT_CONFIG.colors.star"
+        />
+        <text
+          x="0"
+          y="-15"
+          :fill="ORBIT_CONFIG.colors.labels"
+          font-size="14"
+          text-anchor="middle"
+        >{{ star.name }}</text>
+      </g>
+    </svg>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue'
-import type { SelectedStar } from './StarMap.vue'
+import { reactive, watch } from 'vue'
+import type { SelectedStar } from '../types/star'
 
 const { star } = defineProps<{
   star: SelectedStar | null
 }>()
 
-const canvas = ref<HTMLCanvasElement | null>(null)
-let ctx: CanvasRenderingContext2D | null = null
+// 轨道配置
+const ORBIT_CONFIG = {
+  colors: {
+    grid: '#1a1a1a',
+    labels: '#4a9cbc',
+    star: '#ffffff'
+  }
+}
 
 // 行星配置
 interface Planet {
   name: string
   orbitRadius: number
   color: string
+  angle: number
 }
 
-// 添加行星数据
+// 行星数据
 const PLANETS: Planet[] = [
-  { name: 'Planet I', orbitRadius: 20, color: '#4a9cbc' },
-  { name: 'Planet II', orbitRadius: 35, color: '#6a5acd' },
-  { name: 'Planet III', orbitRadius: 55, color: '#20b2aa' },
-  { name: 'Planet IV', orbitRadius: 80, color: '#ba55d3' }
+  { name: 'Planet I', orbitRadius: 20, color: '#4a9cbc', angle: Math.random() * Math.PI * 2 },
+  { name: 'Planet II', orbitRadius: 35, color: '#6a5acd', angle: Math.random() * Math.PI * 2 },
+  { name: 'Planet III', orbitRadius: 55, color: '#20b2aa', angle: Math.random() * Math.PI * 2 },
+  { name: 'Planet IV', orbitRadius: 80, color: '#ba55d3', angle: Math.random() * Math.PI * 2 }
 ]
 
-// 修改轨道配置
-const ORBIT_CONFIG = {
-  centerX: 0,
-  centerY: 0,
-  scale: 1,
-  gridSize: 50,
-  orbitColors: {
-    grid: '#1a1a1a',
-    orbits: '#2a4b5c',
-    labels: '#4a9cbc',
-    star: '#ffffff',
-    planet: '#4a9cbc'
+// 视图状态
+const viewBox = reactive({
+  x: -150,
+  y: -150,
+  width: 300,
+  height: 300
+})
+
+// 网格圆圈半径
+const gridCircles = [20, 40, 60, 80, 100]
+
+// 平移和缩放状态
+const dragState = reactive({
+  isDragging: false,
+  lastX: 0,
+  lastY: 0
+})
+
+// 鼠标事件处理
+const handleMouseDown = (event: MouseEvent) => {
+  dragState.isDragging = true
+  dragState.lastX = event.clientX
+  dragState.lastY = event.clientY
+}
+
+const handleMouseMove = (event: MouseEvent) => {
+  if (!dragState.isDragging) return
+  
+  const deltaX = event.clientX - dragState.lastX
+  const deltaY = event.clientY - dragState.lastY
+  
+  viewBox.x -= deltaX * viewBox.width / 300
+  viewBox.y -= deltaY * viewBox.height / 300
+  
+  dragState.lastX = event.clientX
+  dragState.lastY = event.clientY
+}
+
+const handleMouseUp = () => {
+  dragState.isDragging = false
+}
+
+const handleWheel = (event: WheelEvent) => {
+  event.preventDefault()
+  
+  const zoomFactor = event.deltaY > 0 ? 1.1 : 0.9
+  const minScale = 0.5
+  const maxScale = 2
+  
+  const newWidth = viewBox.width * zoomFactor
+  const newHeight = viewBox.height * zoomFactor
+  
+  if (newWidth / 300 >= minScale && newWidth / 300 <= maxScale) {
+    const mouseX = event.offsetX / 300 * viewBox.width + viewBox.x
+    const mouseY = event.offsetY / 300 * viewBox.height + viewBox.y
+    
+    viewBox.x = mouseX - (mouseX - viewBox.x) * zoomFactor
+    viewBox.y = mouseY - (mouseY - viewBox.y) * zoomFactor
+    viewBox.width = newWidth
+    viewBox.height = newHeight
   }
 }
 
-// 初始化画布
-const initCanvas = () => {
-  if (!canvas.value) return
-  
-  // 设置画布大小
-  const container = canvas.value.parentElement
-  if (!container) return
-  
-  canvas.value.width = container.clientWidth
-  canvas.value.height = container.clientHeight
-  
-  ctx = canvas.value.getContext('2d')
-  if (!ctx) return
-  
-  // 设置中心点
-  ORBIT_CONFIG.centerX = canvas.value.width / 2
-  ORBIT_CONFIG.centerY = canvas.value.height / 2
-  
-  // 计算缩放比例
-  ORBIT_CONFIG.scale = Math.min(canvas.value.width, canvas.value.height) / 300
-}
-
-// 绘制网格
-const drawGrid = () => {
-  if (!ctx || !canvas.value) return
-  
-  ctx.strokeStyle = ORBIT_CONFIG.orbitColors.grid
-  ctx.lineWidth = 1
-  
-  // 只绘制同心圆
-  for (let r = ORBIT_CONFIG.gridSize; r < Math.min(canvas.value.width, canvas.value.height) / 2; r += ORBIT_CONFIG.gridSize) {
-    ctx.beginPath()
-    ctx.arc(ORBIT_CONFIG.centerX, ORBIT_CONFIG.centerY, r * ORBIT_CONFIG.scale, 0, Math.PI * 2)
-    ctx.stroke()
-  }
-}
-
-// 绘制轨道标签
-const drawLabels = () => {
-  if (!ctx || !canvas.value) return
-  
-  ctx.fillStyle = ORBIT_CONFIG.orbitColors.labels
-  ctx.font = '12px Arial'
-  ctx.textAlign = 'left'
-  
-  // 绘制距离标签
-  for (let r = ORBIT_CONFIG.gridSize; r < Math.min(canvas.value.width, canvas.value.height) / 2; r += ORBIT_CONFIG.gridSize) {
-    const label = `${r} ly`
-    ctx.fillText(label, ORBIT_CONFIG.centerX + r * ORBIT_CONFIG.scale + 5, ORBIT_CONFIG.centerY)
-  }
-}
-
-// 绘制中心恒星
-const drawStar = () => {
-  if (!ctx || !star) return
-  
-  ctx.fillStyle = ORBIT_CONFIG.orbitColors.star
-  ctx.beginPath()
-  ctx.arc(ORBIT_CONFIG.centerX, ORBIT_CONFIG.centerY, 5, 0, Math.PI * 2)
-  ctx.fill()
-  
-  // 绘制恒星名称
-  ctx.fillStyle = ORBIT_CONFIG.orbitColors.labels
-  ctx.font = '14px Arial'
-  ctx.textAlign = 'center'
-  ctx.fillText(star.name, ORBIT_CONFIG.centerX, ORBIT_CONFIG.centerY - 15)
-}
-
-// 添加行星绘制函数
-const drawPlanets = () => {
-  if (!ctx) return
-  
+// 重置行星位置
+const resetPlanetPositions = () => {
   PLANETS.forEach(planet => {
-    // 使用非空断言操作符 (!)
-    ctx!.strokeStyle = planet.color
-    ctx!.lineWidth = 1.5
-    ctx!.beginPath()
-    ctx!.arc(
-      ORBIT_CONFIG.centerX,
-      ORBIT_CONFIG.centerY,
-      planet.orbitRadius * ORBIT_CONFIG.scale,
-      0,
-      Math.PI * 2
-    )
-    ctx!.stroke()
-
-    // 计算行星位置（随机角度）
-    const angle = Math.random() * Math.PI * 2
-    const x = ORBIT_CONFIG.centerX + Math.cos(angle) * planet.orbitRadius * ORBIT_CONFIG.scale
-    const y = ORBIT_CONFIG.centerY + Math.sin(angle) * planet.orbitRadius * ORBIT_CONFIG.scale
-
-    // 绘制行星
-    ctx!.fillStyle = planet.color
-    ctx!.beginPath()
-    ctx!.arc(x, y, 3, 0, Math.PI * 2)
-    ctx!.fill()
-
-    // 绘制行星名称
-    ctx!.fillStyle = ORBIT_CONFIG.orbitColors.labels
-    ctx!.font = '12px Arial'
-    ctx!.textAlign = 'left'
-    ctx!.fillText(planet.name, x + 8, y + 4)
+    planet.angle = Math.random() * Math.PI * 2
   })
-}
-
-// 修改绘制函数，添加行星绘制
-const drawOrbitMap = () => {
-  if (!ctx || !canvas.value) return
-  
-  ctx.clearRect(0, 0, canvas.value.width, canvas.value.height)
-  
-  drawGrid()
-  drawLabels()
-  drawPlanets()  // 在恒星之前绘制行星
-  drawStar()
-}
-
-// 监听窗口大小变化
-const handleResize = () => {
-  initCanvas()
-  drawOrbitMap()
 }
 
 // 监听恒星变化
 watch(() => star, () => {
-  drawOrbitMap()
-})
-
-onMounted(() => {
-  initCanvas()
-  drawOrbitMap()
-  window.addEventListener('resize', handleResize)
-})
-
-onUnmounted(() => {
-  window.removeEventListener('resize', handleResize)
+  resetPlanetPositions()
 })
 </script>
 
@@ -189,5 +187,14 @@ onUnmounted(() => {
   width: 100%;
   height: 300px;
   background-color: #000;
+  overflow: hidden;
+}
+
+svg {
+  cursor: grab;
+}
+
+svg:active {
+  cursor: grabbing;
 }
 </style> 
