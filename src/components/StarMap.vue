@@ -1,7 +1,25 @@
 <template>
   <div class="card">
     <div class="card-body">
-      <h5 class="card-title mb-4">Star Map</h5>
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <h5 class="card-title mb-0">Star Map</h5>
+        <div class="d-flex align-items-center gap-3">
+          <div class="form-check form-switch">
+            <input 
+              class="form-check-input" 
+              type="checkbox" 
+              v-model="showRoutes"
+              @change="toggleRoutes"
+            >
+            <label class="form-check-label text-muted">
+              <small>Show Routes</small>
+            </label>
+          </div>
+          <div class="text-muted">
+            <small>Stars: {{ starCount }} | Hyperspace Routes: {{ Math.floor(routeCount) }}</small>
+          </div>
+        </div>
+      </div>
       <div ref="container" class="star-map-container"></div>
     </div>
   </div>
@@ -13,6 +31,10 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 
 const container = ref<HTMLDivElement | null>(null)
+const starCount = ref(0)
+const routeCount = ref(0)
+const showRoutes = ref(true)
+const routeLines = ref<THREE.Line[]>([])  // 存储航道线条的引用
 let scene: THREE.Scene
 let camera: THREE.PerspectiveCamera
 let renderer: THREE.WebGLRenderer
@@ -23,50 +45,69 @@ interface Star {
   connections: Star[]
 }
 
+// 星系配置常量
+const BASE_STARS = 4000  // 基础恒星数
+const STAR_VARIATION = 0.05  // 随机变化
+const TOTAL_STARS = BASE_STARS + Math.floor((Math.random() * 2 - 1) * BASE_STARS * STAR_VARIATION)  // 最终恒星数
+const BACKGROUND_STAR_RATIO = 0.4  // 背景星占总数的比例
+const MIN_STAR_DISTANCE = 0.3  // 恒星之间的最小距离
+
+// 检查新恒星是否与现有恒星过近
+const isTooClose = (position: THREE.Vector3, stars: Star[]): boolean => {
+  return stars.some(existingStar => 
+    position.distanceTo(existingStar.position) < MIN_STAR_DISTANCE
+  )
+}
+
 // 生成随机星系
-const generateGalaxy = (starCount: number, maxDistance: number): Star[] => {
+const generateGalaxy = (maxDistance: number): Star[] => {
   const stars: Star[] = []
   const armCount = 4  // 螺旋臂数量
   const armWindings = 0.4  // 螺旋臂缠绕圈数
-  const armWidth = 0.15  // 增加螺旋臂宽度
-  const armOffset = 0.12  // 增加恒星偏离螺旋臂的最大距离
-  const armDensity = 0.8  // 增加密度以填充更宽的螺旋臂
+  const armWidth = 0.15  // 螺旋臂宽度
+  const armOffset = 0.12  // 恒星偏离螺旋臂的最大距离
+  const armDensity = 0.8  // 控制螺旋臂的密度
   const fadeDistance = 0.85  // 开始渐变消失的距离比例
   const innerTightness = 2  // 内部螺旋的紧密程度
-  const backgroundStarCount = starCount * 0.5  // 背景星星数量
+  const centerThickness = 0.25  // 中心区域的厚度系数
   
   // 生成背景星场
-  for (let i = 0; i < backgroundStarCount; i++) {
+  while (stars.length < Math.floor(TOTAL_STARS * BACKGROUND_STAR_RATIO)) {
     const angle = Math.random() * Math.PI * 2
-    
-    // 使用幂函数使中心更密集
-    const radiusRatio = Math.pow(Math.random(), 2)  // 使用平方来增加中心密度
+    const radiusRatio = Math.pow(Math.random(), 2)
     const radius = maxDistance * radiusRatio
     
-    // 根据到中心的距离计算保留概率，使中心区域保留更多恒星
-    const keepProbability = Math.pow(1 - radius / maxDistance, 2)  // 使用平方增加中心保留概率
+    // 根据到中心的距离计算保留概率
+    const keepProbability = Math.pow(1 - radius / maxDistance, 2)
     if (Math.random() > keepProbability) {
       continue
     }
 
-    // 减小高度变化，使中心区域更扁平
-    const heightScale = Math.pow(radius / maxDistance, 1.5)  // 使用幂函数控制高度
-    const height = (Math.random() - 0.5) * maxDistance * 0.05 * heightScale
+    // 修改高度计算，中心更厚
+    const heightScale = Math.pow(radius / maxDistance, 1.5)
+    const centerFactor = Math.exp(-radius / (maxDistance * 0.2))  // 指数衰减
+    const height = (Math.random() - 0.5) * maxDistance * 
+      (0.05 + centerFactor * centerThickness) * heightScale
 
-    const star: Star = {
-      position: new THREE.Vector3(
-        radius * Math.cos(angle),
-        height,
-        radius * Math.sin(angle)
-      ),
-      connections: []
+    const position = new THREE.Vector3(
+      radius * Math.cos(angle),
+      height,
+      radius * Math.sin(angle)
+    )
+
+    // 检查距离
+    if (isTooClose(position, stars)) {
+      continue
     }
-    stars.push(star)
+
+    stars.push({
+      position,
+      connections: []
+    })
   }
 
   // 生成螺旋臂上的恒星
-  for (let i = 0; i < starCount; i++) {
-    // 螺旋臂上的恒星
+  while (stars.length < TOTAL_STARS) {
     const arm = Math.floor(Math.random() * armCount)
     const radius = Math.random() * maxDistance
     
@@ -108,21 +149,29 @@ const generateGalaxy = (starCount: number, maxDistance: number): Star[] => {
       continue
     }
     
-    // 高度随距离增加而减小，内部区域高度更小
+    // 修改高度计算，中心更厚
     const heightScale = (1 - (adjustedRadius / maxDistance)) * innerFactor
+    const centerFactor = Math.exp(-adjustedRadius / (maxDistance * 0.2))  // 指数衰减
     const heightRandomness = distanceRatio > fadeDistance ? 
       (distanceRatio - fadeDistance) / (1 - fadeDistance) : 0
-    const height = (Math.random() - 0.5) * maxDistance * (0.05 + heightRandomness * 0.1) * heightScale
+    const height = (Math.random() - 0.5) * maxDistance * 
+      (0.05 + centerFactor * centerThickness + heightRandomness * 0.1) * heightScale
 
-    const star: Star = {
-      position: new THREE.Vector3(
-        adjustedRadius * Math.cos(angle),
-        height,
-        adjustedRadius * Math.sin(angle)
-      ),
-      connections: []
+    const position = new THREE.Vector3(
+      adjustedRadius * Math.cos(angle),
+      height,
+      adjustedRadius * Math.sin(angle)
+    )
+
+    // 检查距离
+    if (isTooClose(position, stars)) {
+      continue
     }
-    stars.push(star)
+
+    stars.push({
+      position,
+      connections: []
+    })
   }
 
   // 连接邻近的恒星，限制每个恒星最多5个连接
@@ -163,6 +212,14 @@ const getStarColor = (temperature: number) => {
   return new THREE.Color(r, g, b)
 }
 
+// 切换航道显示
+const toggleRoutes = () => {
+  routeLines.value.forEach(line => {
+    const material = line.material as THREE.LineBasicMaterial
+    material.opacity = showRoutes.value ? 0.1 : 0
+  })
+}
+
 // 初始化场景
 const initScene = () => {
   if (!container.value) return
@@ -192,15 +249,16 @@ const initScene = () => {
   controls.dampingFactor = 0.05  // 添加阻尼效果
   controls.screenSpacePanning = true  // 使平移更自然
 
-  // 生成星系
-  const stars = generateGalaxy(10000, 100)
+  // 生成星系，只传入最大距离参数
+  const stars = generateGalaxy(100)
+  starCount.value = stars.length
 
   // 创建恒星实例化网格
   const sphereGeometry = new THREE.SphereGeometry(1, 8, 6)  // 基础半径设为1，方便缩放
   const starMaterial = new THREE.MeshBasicMaterial({
     color: 0xffffff,
     transparent: true,
-    opacity: 0.8,
+    opacity: 1,
     blending: THREE.AdditiveBlending
   })
 
@@ -257,11 +315,12 @@ const initScene = () => {
 
   // 创建超空间航道
   const lineMaterial = new THREE.LineBasicMaterial({
-    color: 0x4444ff,
-    opacity: 0,
+    color: 0x7b7b7b,
+    opacity: showRoutes.value ? 0.1 : 0,
     transparent: true
   })
 
+  let routes = 0
   stars.forEach(star => {
     star.connections.forEach(connectedStar => {
       const lineGeometry = new THREE.BufferGeometry()
@@ -272,8 +331,11 @@ const initScene = () => {
       lineGeometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3))
       const line = new THREE.Line(lineGeometry, lineMaterial)
       scene.add(line)
+      routeLines.value.push(line)  // 保存线条引用
+      routes++
     })
   })
+  routeCount.value = routes / 2  // 除以2因为每条航道被计算了两次
 
   // 动画循环
   const animate = () => {
@@ -312,5 +374,14 @@ onUnmounted(() => {
   width: 100%;
   height: 600px;
   background-color: black;
+}
+
+.form-check-input {
+  cursor: pointer;
+}
+
+.form-check-label {
+  cursor: pointer;
+  user-select: none;
 }
 </style> 
