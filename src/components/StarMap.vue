@@ -16,7 +16,7 @@
             </label>
           </div>
           <div v-if="selectedStar" class="text-muted me-3">
-            <small>Selected Star: {{ selectedStar.index }}</small>
+            <small>Selected Star: {{ selectedStar.name }} ({{ Math.round(selectedStar.temperature) }}K)</small>
           </div>
           <div class="text-muted">
             <small>Stars: {{ starCount }} | Hyperspace Routes: {{ Math.floor(routeCount) }}</small>
@@ -30,6 +30,10 @@
         @mousemove="handleMouseMove"
       ></div>
     </div>
+    <StarSystem 
+      :star="selectedStar" 
+      @close="selectedStar = null"
+    />
   </div>
 </template>
 
@@ -38,6 +42,7 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { Raycaster, Vector2 } from 'three'
+import StarSystem from './StarSystem.vue'
 
 const container = ref<HTMLDivElement | null>(null)
 const starCount = ref(0)
@@ -54,11 +59,15 @@ const raycaster = new Raycaster()
 const mouse = new Vector2()
 
 interface Star {
+  id: string
+  name: string
   position: THREE.Vector3
   connections: Star[]
 }
 
 interface SelectedStar {
+  id: string
+  name: string
   index: number
   position: THREE.Vector3
   temperature: number
@@ -85,6 +94,11 @@ const GLOW_CONFIG = {
   }
 }
 
+// 生成恒星名称
+const generateStarName = (id: number): string => {
+  return `HIP-${id.toString().padStart(4, '0')}`
+}
+
 // 检查新恒星是否与现有恒星过近
 const isTooClose = (position: THREE.Vector3, stars: Star[]): boolean => {
   return stars.some(existingStar => 
@@ -105,6 +119,7 @@ const generateGalaxy = (maxDistance: number): Star[] => {
   const centerThickness = 0.25  // 中心区域的厚度系数
   
   // 生成背景星场
+  let starId = 1
   while (stars.length < Math.floor(TOTAL_STARS * BACKGROUND_STAR_RATIO)) {
     const angle = Math.random() * Math.PI * 2
     const radiusRatio = Math.pow(Math.random(), 2)
@@ -134,9 +149,12 @@ const generateGalaxy = (maxDistance: number): Star[] => {
     }
 
     stars.push({
+      id: starId.toString(),
+      name: generateStarName(starId),
       position,
       connections: []
     })
+    starId++
   }
 
   // 生成螺旋臂上的恒星
@@ -202,9 +220,12 @@ const generateGalaxy = (maxDistance: number): Star[] => {
     }
 
     stars.push({
+      id: starId.toString(),
+      name: generateStarName(starId),
       position,
       connections: []
     })
+    starId++
   }
 
   // 连接邻近的恒星，限制每个恒星最多5个连接
@@ -348,6 +369,8 @@ const handleStarClick = (event: MouseEvent) => {
         2000 + color.g * 13000
 
       selectedStar.value = {
+        id: generateStarName(instanceId + 1),  // +1 因为ID从1开始
+        name: generateStarName(instanceId + 1),
         index: instanceId,
         position,
         temperature
@@ -547,6 +570,9 @@ onUnmounted(() => {
     ;(hoverGlowMesh.material as THREE.Material).dispose()
   }
 })
+
+// 导出 SelectedStar 类型供其他组件使用
+export type { SelectedStar }
 </script>
 
 <style scoped>
