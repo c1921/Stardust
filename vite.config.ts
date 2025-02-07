@@ -5,4 +5,14 @@ import vue from '@vitejs/plugin-vue'
 export default defineConfig({
   base: '/',
   plugins: [vue()],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'three-vendor': ['three'],
+          'vendor': ['vue', 'pinia']
+        }
+      }
+    }
+  }
 })
