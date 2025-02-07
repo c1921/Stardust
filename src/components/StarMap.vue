@@ -15,12 +15,20 @@
               <small>Show Routes</small>
             </label>
           </div>
+          <div v-if="selectedStar" class="text-muted me-3">
+            <small>Selected Star: {{ selectedStar.index }}</small>
+          </div>
           <div class="text-muted">
             <small>Stars: {{ starCount }} | Hyperspace Routes: {{ Math.floor(routeCount) }}</small>
           </div>
         </div>
       </div>
-      <div ref="container" class="star-map-container"></div>
+      <div 
+        ref="container" 
+        class="star-map-container"
+        @click="handleStarClick"
+        @mousemove="handleMouseMove"
+      ></div>
     </div>
   </div>
 </template>
@@ -29,20 +37,31 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
+import { Raycaster, Vector2 } from 'three'
 
 const container = ref<HTMLDivElement | null>(null)
 const starCount = ref(0)
 const routeCount = ref(0)
 const showRoutes = ref(true)
 const routeLines = ref<THREE.Line[]>([])  // 存储航道线条的引用
+const selectedStar = ref<SelectedStar | null>(null)
 let scene: THREE.Scene
 let camera: THREE.PerspectiveCamera
 let renderer: THREE.WebGLRenderer
 let controls: OrbitControls
+let starMesh: THREE.InstancedMesh
+const raycaster = new Raycaster()
+const mouse = new Vector2()
 
 interface Star {
   position: THREE.Vector3
   connections: Star[]
+}
+
+interface SelectedStar {
+  index: number
+  position: THREE.Vector3
+  temperature: number
 }
 
 // 星系配置常量
@@ -51,6 +70,20 @@ const STAR_VARIATION = 0.05  // 随机变化
 const TOTAL_STARS = BASE_STARS + Math.floor((Math.random() * 2 - 1) * BASE_STARS * STAR_VARIATION)  // 最终恒星数
 const BACKGROUND_STAR_RATIO = 0.4  // 背景星占总数的比例
 const MIN_STAR_DISTANCE = 0.3  // 恒星之间的最小距离
+
+// 发光效果配置
+const GLOW_CONFIG = {
+  selected: {
+    color: 0x00ffff,
+    opacity: 0.5,
+    size: 0.4
+  },
+  hover: {
+    color: 0x00ffff,
+    opacity: 0.2,
+    size: 0.4
+  }
+}
 
 // 检查新恒星是否与现有恒星过近
 const isTooClose = (position: THREE.Vector3, stars: Star[]): boolean => {
@@ -220,6 +253,131 @@ const toggleRoutes = () => {
   })
 }
 
+// 创建发光材质
+const createGlowMaterial = (config: typeof GLOW_CONFIG.selected) => {
+  return new THREE.MeshBasicMaterial({
+    color: config.color,
+    transparent: true,
+    opacity: config.opacity,
+    blending: THREE.AdditiveBlending
+  })
+}
+
+// 在 script setup 中添加变量
+let selectedGlowMesh: THREE.Mesh | null = null
+let hoverGlowMesh: THREE.Mesh | null = null
+
+// 添加鼠标移动处理
+const handleMouseMove = (event: MouseEvent) => {
+  if (!container.value) return
+
+  const rect = container.value.getBoundingClientRect()
+  mouse.x = ((event.clientX - rect.left) / container.value.clientWidth) * 2 - 1
+  mouse.y = -((event.clientY - rect.top) / container.value.clientHeight) * 2 + 1
+
+  raycaster.setFromCamera(mouse, camera)
+  const intersects = raycaster.intersectObject(starMesh)
+
+  if (intersects.length > 0) {
+    const instanceId = intersects[0].instanceId
+    if (instanceId !== undefined) {
+      // 如果鼠标悬停在当前选中的恒星上，不显示悬浮效果
+      if (selectedStar.value && instanceId === selectedStar.value.index) {
+        if (hoverGlowMesh) {
+          hoverGlowMesh.visible = false
+        }
+        return
+      }
+
+      const position = new THREE.Vector3()
+      const matrix = new THREE.Matrix4()
+      starMesh.getMatrixAt(instanceId, matrix)
+      position.setFromMatrixPosition(matrix)
+
+      // 创建或更新悬浮发光效果
+      if (!hoverGlowMesh) {
+        const glowGeometry = new THREE.SphereGeometry(GLOW_CONFIG.hover.size, 16, 12)
+        const glowMaterial = createGlowMaterial(GLOW_CONFIG.hover)
+        hoverGlowMesh = new THREE.Mesh(glowGeometry, glowMaterial)
+        scene.add(hoverGlowMesh)
+      }
+      
+      hoverGlowMesh.position.copy(position)
+      hoverGlowMesh.visible = true
+    }
+  } else {
+    if (hoverGlowMesh) {
+      hoverGlowMesh.visible = false
+    }
+  }
+}
+
+// 修改点击处理函数
+const handleStarClick = (event: MouseEvent) => {
+  if (!container.value) return
+
+  const rect = container.value.getBoundingClientRect()
+  mouse.x = ((event.clientX - rect.left) / container.value.clientWidth) * 2 - 1
+  mouse.y = -((event.clientY - rect.top) / container.value.clientHeight) * 2 + 1
+
+  raycaster.setFromCamera(mouse, camera)
+  const intersects = raycaster.intersectObject(starMesh)
+  
+  if (intersects.length > 0) {
+    const instanceId = intersects[0].instanceId
+    if (instanceId !== undefined) {
+      // 如果点击已选中的恒星，取消选中
+      if (selectedStar.value && instanceId === selectedStar.value.index) {
+        selectedStar.value = null
+        if (selectedGlowMesh) {
+          selectedGlowMesh.visible = false
+        }
+        return
+      }
+
+      const position = new THREE.Vector3()
+      const matrix = new THREE.Matrix4()
+      starMesh.getMatrixAt(instanceId, matrix)
+      position.setFromMatrixPosition(matrix)
+
+      // 获取恒星颜色（温度）
+      const color = new THREE.Color()
+      starMesh.getColorAt(instanceId, color)
+      const temperature = color.b > 0 ? 
+        15000 + color.b * 15000 : 
+        2000 + color.g * 13000
+
+      selectedStar.value = {
+        index: instanceId,
+        position,
+        temperature
+      }
+
+      // 创建或更新选中发光效果
+      if (!selectedGlowMesh) {
+        const glowGeometry = new THREE.SphereGeometry(GLOW_CONFIG.selected.size, 16, 12)
+        const glowMaterial = createGlowMaterial(GLOW_CONFIG.selected)
+        selectedGlowMesh = new THREE.Mesh(glowGeometry, glowMaterial)
+        scene.add(selectedGlowMesh)
+      }
+      
+      selectedGlowMesh.position.copy(position)
+      selectedGlowMesh.visible = true
+
+      // 隐藏悬浮效果
+      if (hoverGlowMesh) {
+        hoverGlowMesh.visible = false
+      }
+    }
+  } else {
+    // 点击空白处，取消选中
+    selectedStar.value = null
+    if (selectedGlowMesh) {
+      selectedGlowMesh.visible = false
+    }
+  }
+}
+
 // 初始化场景
 const initScene = () => {
   if (!container.value) return
@@ -263,7 +421,7 @@ const initScene = () => {
   })
 
   // 创建实例化网格
-  const starMesh = new THREE.InstancedMesh(
+  starMesh = new THREE.InstancedMesh(
     sphereGeometry,
     starMaterial,
     stars.length
@@ -341,6 +499,18 @@ const initScene = () => {
   const animate = () => {
     requestAnimationFrame(animate)
     controls.update()
+
+    // 更新发光效果动画
+    const time = Date.now() * 0.003
+    const scale = 1 + Math.sin(time) * 0.1
+
+    if (selectedGlowMesh && selectedGlowMesh.visible) {
+      selectedGlowMesh.scale.set(scale, scale, scale)
+    }
+    if (hoverGlowMesh && hoverGlowMesh.visible) {
+      hoverGlowMesh.scale.set(scale, scale, scale)
+    }
+
     renderer.render(scene, camera)
   }
   animate()
@@ -366,6 +536,16 @@ onUnmounted(() => {
   if (container.value) {
     container.value.innerHTML = ''
   }
+  if (selectedGlowMesh) {
+    scene.remove(selectedGlowMesh)
+    selectedGlowMesh.geometry.dispose()
+    ;(selectedGlowMesh.material as THREE.Material).dispose()
+  }
+  if (hoverGlowMesh) {
+    scene.remove(hoverGlowMesh)
+    hoverGlowMesh.geometry.dispose()
+    ;(hoverGlowMesh.material as THREE.Material).dispose()
+  }
 })
 </script>
 
@@ -374,6 +554,7 @@ onUnmounted(() => {
   width: 100%;
   height: 600px;
   background-color: black;
+  cursor: pointer;
 }
 
 .form-check-input {
